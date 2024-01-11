@@ -181,7 +181,7 @@ public class CalculateAverage_jbachorik {
             int granularity = 32 * 1024 * 1024;
             int targetWorkers = Math.min(Math.max(1, (int) (fc.size() / granularity)), workers);
             long chunkSize = fc.size() / targetWorkers;
-            // System.out.println("Chunk size: " + chunkSize + ", workers: " + targetWorkers);
+             System.out.println("Chunk size: " + chunkSize + ", workers: " + targetWorkers);
             for (ByteBuffer bb : mmap(fc, (int) chunkSize)) {
                 workerPool.submit(() -> {
                     try {
