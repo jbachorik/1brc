@@ -213,17 +213,42 @@ public class CalculateAverage_jbachorik {
         if (l == 0) {
             return h;
         }
-        h = (int) (31 * 31 * 31 * 31 * 31 * 31 * 31 * 31 * h
-                + 31 * 31 * 31 * 31 * 31 * 31 * 31 * ((l >> 56 & 0xFF))
-                + 31 * 31 * 31 * 31 * 31 * 31 * ((l >> 48 & 0xFF))
-                + 31 * 31 * 31 * 31 * 31 * ((l >> 40 & 0xFF))
-                + 31 * 31 * 31 * 31 * ((l >> 32 & 0xFF))
-                + 31 * 31 * 31 * ((l >> 24 & 0xFF))
-                + 31 * 31 * ((l >> 16) & 0xFF)
-                + 31 * ((l >> 8) & 0xFF)
-                + (l & 0xFF));
+//        for (int i = 56; i >= 0; i -= 8) {
+//            h ^= (int)((l >> i) & 0xFF);
+//            h *= FNV_32_PRIME;
+//        }
+//        h ^= ((l >> 56 & 0xFF));
+//        h *= FNV_32_PRIME;
+        h = (int) (31 * 31 * 31 * 31 * 31 * 31 * 31 * 31 * h);
+        h += (l & 0xFF);
+        l = l >> 8;
+        h += 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * 31 * 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * 31 * 31 * 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+        h += 31 * 31 * 31 * 31 * 31 * 31 * 31 * (l & 0xFF);
+        l = l >> 8;
+//                + 31 * 31 * 31 * 31 * 31 * 31 * 31 * ((l >> 56 & 0xFF))
+//                + 31 * 31 * 31 * 31 * 31 * 31 * ((l >> 48 & 0xFF))
+//                + 31 * 31 * 31 * 31 * 31 * ((l >> 40 & 0xFF))
+//                + 31 * 31 * 31 * 31 * ((l >> 32 & 0xFF))
+//                + 31 * 31 * 31 * ((l >> 24 & 0xFF))
+//                + 31 * 31 * ((l >> 16) & 0xFF)
+//                + 31 * ((l >> 8) & 0xFF)
+//                + (l & 0xFF));
         return h;
     }
+
+    private static final int FNV_32_PRIME = 0x01000193;
+    private static final int FNV_32_INIT = 0x811c9dc5;
 
     private static StatsMap processChunk(ByteBuffer bb) {
         StatsMap map = new StatsMap();
@@ -233,7 +258,7 @@ public class CalculateAverage_jbachorik {
         int readLimit = limit - 8;
         long v0 = 0;
         long v1 = 0;
-        int hashCode = 0;
+        int hashCode = FNV_32_INIT;
         int lastNewLine = -1;
 
         while (offset < limit) {
@@ -252,7 +277,7 @@ public class CalculateAverage_jbachorik {
                 int pos = 7 - (Long.numberOfTrailingZeros(x) >>> 3);
                 int yoffset = offset;
                 int semiPos = firstInstance(v1, semiPattern);
-                if (semiPos == 8 || semiPos >= pos) {
+                if (semiPos >= pos) {
                     yoffset -= 8;
                     semiPos = firstInstance(v0, semiPattern);
                     // semiPos will be at least 3 (new line is in the upper word and the value has at most 5 bytes)
@@ -298,6 +323,14 @@ public class CalculateAverage_jbachorik {
             }
         }
         return map;
+    }
+
+    private static long rotateLeft(long value, int bits) {
+        long hw = value & 0xFFFFFFFF00000000L;
+        long lw = value & 0x00000000FFFFFFFFL;
+        long hr = (hw << bits) | (hw >>> (64 - bits));
+        long lr = (lw << bits) | (lw >>> (64 - bits));
+        return (hr & 0xFFFFFFFFL) << 16 | (lr & 0xFFFFFFFFL);
     }
 
     private static final long fastParserMask = 0x3030303030303030L;
