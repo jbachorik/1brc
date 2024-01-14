@@ -18,7 +18,10 @@ package dev.morling.onebrc;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Map;
@@ -30,14 +33,14 @@ import java.util.function.BiConsumer;
 
 public class CalculateAverage_jbachorik {
     private static final class Key {
-        final ByteBuffer bb;
+        final MemorySegment memorySegment;
         final int offset;
         final int len;
         final long v0, v1;
         final int hash;
 
-        Key(ByteBuffer bb, int offset, int len, long v0, long v1, int hash) {
-            this.bb = bb;
+        Key(MemorySegment ms, int offset, int len, long v0, long v1, int hash) {
+            this.memorySegment = ms;
             this.offset = offset;
             this.len = len;
             this.v0 = v0;
@@ -54,7 +57,9 @@ public class CalculateAverage_jbachorik {
                 return false;
             }
             for (int i = 0; i < len - 8; i += 8) {
-                if (bb.getLong(this.offset + i) != bb.getLong(offset + i)) {
+                long l = memorySegment.get(ValueLayout.OfLong.JAVA_LONG_UNALIGNED, this.offset + i);
+                long r = memorySegment.get(ValueLayout.OfLong.JAVA_LONG_UNALIGNED, offset + i);
+                if (l != r) {
                     return false;
                 }
             }
@@ -63,8 +68,7 @@ public class CalculateAverage_jbachorik {
 
         @Override
         public String toString() {
-            byte[] bytes = new byte[len];
-            bb.get(offset, bytes);
+            byte[] bytes = memorySegment.asSlice(offset, len).toArray(ValueLayout.OfByte.JAVA_BYTE);
             return new String(bytes);
         }
     }
@@ -129,14 +133,14 @@ public class CalculateAverage_jbachorik {
         private static final int BUCKET_SIZE = 16;
         private final StatsHolder[][] map = new StatsHolder[BUCKETS][BUCKET_SIZE];
 
-        public Stats getOrInsert(ByteBuffer buffer, int offset, int len, int idx, long v0, long v1) {
+        public Stats getOrInsert(MemorySegment ms, int offset, int len, int idx, long v0, long v1) {
             StatsHolder[] bucket = map[idx];
             int bucketOffset = 0;
             do {
                 StatsHolder statsHolder = bucket[bucketOffset];
                 if (statsHolder == null) {
                     Stats stats = new Stats();
-                    bucket[bucketOffset] = new StatsHolder(new Key(buffer, offset, len, v0, v1, idx), stats);
+                    bucket[bucketOffset] = new StatsHolder(new Key(ms, offset, len, v0, v1, idx), stats);
                     return stats;
                 }
                 if (statsHolder.key.equals(offset, len, v0, v1)) {
@@ -206,6 +210,7 @@ public class CalculateAverage_jbachorik {
     private static final long fnv64Prime = 0x100000001B3L;
 
     private static StatsMap processChunk(ByteBuffer bb) {
+        MemorySegment ms = MemorySegment.ofBuffer(bb);
         StatsMap map = new StatsMap();
 
         int offset = 0;
@@ -219,10 +224,14 @@ public class CalculateAverage_jbachorik {
         while (offset < limit) {
             if (offset > readLimit) {
                 int over = offset - readLimit;
+//                v1 = ms.get(ValueLayout.OfLong.JAVA_LONG_UNALIGNED, limit - 8);
                 v1 = bb.getLong(limit - 8);
+//                long v11 = ms.get(ValueLayout.OfLong.JAVA_BYTE.withOrder(ByteOrder.BIG_ENDIAN), limit - 8);
                 v1 = v1 << (over * 8);
             }
             else {
+//                v1 = ms.getAtIndex(ValueLayout.OfLong.JAVA_BYTE, offset);
+//                v1 = ms.get(ValueLayout.OfLong.JAVA_LONG_UNALIGNED, offset);
                 v1 = bb.getLong(offset);
             }
             long x = preprocess(v1, newLinePattern);
@@ -278,7 +287,7 @@ public class CalculateAverage_jbachorik {
                 // projection of the hash code to 32 bits -> 65k buckets
                 long idx = ((hashCode & 0xFFFFFFFF00000000L) >> 32) ^ (hashCode & 0x00000000FFFFFFFFL);
                 idx = ((idx & 0x00000000FFFF0000L) >> 16) ^ (idx & 0x000000000000FFFFL);
-                map.getOrInsert(bb, lastNewLine + 1, len, (int) idx, v0, v1).add(fastParse(value, valueLen));
+                map.getOrInsert(ms, lastNewLine + 1, len, (int) idx, v0, v1).add(fastParse(value, valueLen));
 
                 offset += pos + 1;
                 lastNewLine = offset - 1;
